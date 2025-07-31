@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_monitoring_description">This service monitors app usage time and provides notifications at 50% and 70% of the allowed time, and locks apps when the time limit is reached.</string>
+</resources> 
