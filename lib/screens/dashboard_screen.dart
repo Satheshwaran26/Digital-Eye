@@ -37,6 +37,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   String? _currentForegroundAppName;
   Timer? _refreshTimer;
 
+  // State tracking to prevent flickering
+  bool _lastMonitoringState = false;
+  int _lastRemainingSeconds = 0;
+  String? _lastForegroundAppName;
+
+  // Session completion state
+  bool _sessionCompletedToday = false;
+
   // Platform channel for native communication
   static const platform = MethodChannel('app_blocker');
 
@@ -53,6 +61,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
     _setupWidgetChannel();
     _loadTimerState();
+    _loadSessionCompletionState();
     _setupNativeMethodHandlers();
     _startRefreshTimer();
     _requestTimerUpdate();
@@ -71,11 +80,22 @@ class _DashboardScreenState extends State<DashboardScreen>
         debugPrint(
             'Dashboard: Got timer status from native - $remainingSeconds seconds, active: $isMonitoringActive, app: $appName');
 
-        setState(() {
-          _remainingSeconds = remainingSeconds;
-          _isMonitoringActive = isMonitoringActive;
-          _currentForegroundAppName = appName.isNotEmpty ? appName : null;
-        });
+        final newMonitoringState = isMonitoringActive && remainingSeconds > 0;
+        final hasStateChange = _lastMonitoringState != newMonitoringState ||
+            _lastRemainingSeconds != remainingSeconds ||
+            _currentForegroundAppName != (appName.isNotEmpty ? appName : null);
+
+        if (hasStateChange) {
+          setState(() {
+            _remainingSeconds = remainingSeconds;
+            _isMonitoringActive = newMonitoringState;
+            _currentForegroundAppName = appName.isNotEmpty ? appName : null;
+            _lastMonitoringState = newMonitoringState;
+            _lastRemainingSeconds = remainingSeconds;
+          });
+          debugPrint(
+              'Dashboard: State updated - monitoring: $_isMonitoringActive, remaining: $_remainingSeconds');
+        }
       } else {
         // Fallback to SharedPreferences if native method returns null
         debugPrint(
@@ -93,22 +113,56 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _loadTimerState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final remainingSecs = prefs.getInt('remaining_seconds') ?? 0;
-      final isMonitoringActive = prefs.getBool('monitoring_active') ?? false;
+      final remainingSecs = prefs.getInt('remainingSeconds') ?? 0;
       final currentAppName = prefs.getString('current_foreground_app');
 
       debugPrint(
-          'Dashboard: Loading timer state - remaining: $remainingSecs, active: $isMonitoringActive, app: $currentAppName');
+          'Dashboard: Loading timer state - remaining: $remainingSecs, app: $currentAppName');
 
       if (mounted) {
         setState(() {
           _remainingSeconds = remainingSecs;
-          _isMonitoringActive = isMonitoringActive;
+          _isMonitoringActive = false; // Will be updated by native side
           _currentForegroundAppName = currentAppName;
+          _lastRemainingSeconds = remainingSecs;
+          _lastMonitoringState = false;
         });
       }
     } catch (e) {
       debugPrint('Error loading timer state: $e');
+    }
+  }
+
+  // Load session completion state from SharedPreferences
+  Future<void> _loadSessionCompletionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isCompleted = prefs.getBool('sessionCompletedToday') ?? false;
+
+      debugPrint(
+          '🔍 Dashboard: Loading session completion state: $isCompleted');
+
+      if (mounted) {
+        setState(() {
+          _sessionCompletedToday = isCompleted;
+        });
+        debugPrint(
+            '🔍 Dashboard: Session completion state set to: $_sessionCompletedToday');
+      }
+    } catch (e) {
+      debugPrint('Error loading session completion state: $e');
+    }
+  }
+
+  // Save session completion state to SharedPreferences
+  Future<void> _saveSessionCompletionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('sessionCompletedToday', _sessionCompletedToday);
+      debugPrint(
+          '💾 Dashboard: Session completion state saved: $_sessionCompletedToday');
+    } catch (e) {
+      debugPrint('Error saving session completion state: $e');
     }
   }
 
@@ -130,11 +184,26 @@ class _DashboardScreenState extends State<DashboardScreen>
                 'Dashboard: Received timer update - $remainingSeconds seconds, active: $isMonitoringActive');
 
             if (mounted) {
-              setState(() {
-                _remainingSeconds = remainingSeconds;
-                _isMonitoringActive = isMonitoringActive;
-                _currentForegroundAppName = appName.isNotEmpty ? appName : null;
-              });
+              final newMonitoringState =
+                  isMonitoringActive && remainingSeconds > 0;
+              final hasStateChange =
+                  _lastMonitoringState != newMonitoringState ||
+                      _lastRemainingSeconds != remainingSeconds ||
+                      _currentForegroundAppName !=
+                          (appName.isNotEmpty ? appName : null);
+
+              if (hasStateChange) {
+                setState(() {
+                  _remainingSeconds = remainingSeconds;
+                  _isMonitoringActive = newMonitoringState;
+                  _currentForegroundAppName =
+                      appName.isNotEmpty ? appName : null;
+                  _lastMonitoringState = newMonitoringState;
+                  _lastRemainingSeconds = remainingSeconds;
+                });
+                debugPrint(
+                    'Dashboard: Native update - monitoring: $_isMonitoringActive, remaining: $_remainingSeconds');
+              }
             }
             break;
 
@@ -145,16 +214,23 @@ class _DashboardScreenState extends State<DashboardScreen>
                 _remainingSeconds = 0;
                 _isMonitoringActive = false;
                 _currentForegroundAppName = null;
+                _sessionCompletedToday = true;
+                _lastRemainingSeconds = 0;
+                _lastMonitoringState = false;
               });
+
+              // Save session completion state
+              _saveSessionCompletionState();
 
               // Show completion message
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Text(
-                    '🎉 Timer Complete! Great job managing your screen time!',
+                    '✅ Today\'s scheduled has finished!',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontFamily: 'Poppins',
                     ),
                   ),
                   duration: const Duration(seconds: 5),
@@ -177,7 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // Start a timer to periodically refresh the timer state
   void _startRefreshTimer() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         // Only load from SharedPreferences as fallback, native method takes precedence
         _requestTimerUpdate();
@@ -406,7 +482,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.white.withOpacity(0.15),
+            color: _sessionCompletedToday
+                ? Colors.green.withOpacity(0.3)
+                : Colors.white.withOpacity(0.15),
             width: 1,
           ),
           boxShadow: [
@@ -435,15 +513,19 @@ class _DashboardScreenState extends State<DashboardScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.timer_off,
-                color: Colors.grey[400],
+                _sessionCompletedToday ? Icons.check_circle : Icons.timer_off,
+                color: _sessionCompletedToday
+                    ? Colors.green[300]
+                    : Colors.grey[400],
                 size: 24,
               ),
               const SizedBox(height: 6),
               Text(
-                'No Timer',
+                _sessionCompletedToday ? 'Completed' : 'No Timer',
                 style: TextStyle(
-                  color: Colors.grey[300],
+                  color: _sessionCompletedToday
+                      ? Colors.green[200]
+                      : Colors.grey[300],
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Poppins',
@@ -451,9 +533,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               const SizedBox(height: 2),
               Text(
-                'Start monitoring apps',
+                _sessionCompletedToday
+                    ? 'Today\'s scheduled finished'
+                    : 'Start monitoring apps',
                 style: TextStyle(
-                  color: Colors.grey[500],
+                  color: _sessionCompletedToday
+                      ? Colors.green[300]
+                      : Colors.grey[500],
                   fontSize: 10,
                   fontFamily: 'Poppins',
                 ),

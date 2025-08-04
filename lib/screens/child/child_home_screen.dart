@@ -327,60 +327,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
       children: [
         // Session completion indicator
         if (_sessionCompletedToday)
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 32,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Session Completed Today!',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Great job managing your screen time!',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 14,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          
         Expanded(
           child: DashboardScreen(qrCodeId: widget.qrCodeId),
         ),
@@ -493,12 +440,12 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
           selectedLabelStyle: const TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
-            fontSize: 12,
+            fontSize: 10,
           ),
           unselectedLabelStyle: const TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w400,
-            fontSize: 12,
+            fontSize: 10,
           ),
           items: [
             BottomNavigationBarItem(
@@ -537,7 +484,7 @@ class _ChildHomeScreenState extends State<ChildHomeScreen> {
                   size: _selectedIndex == 1 ? 28 : 24,
                 ),
               ),
-              label: 'Focus',
+              label: 'Focus Mode',
             ),
             BottomNavigationBarItem(
               icon: AnimatedContainer(

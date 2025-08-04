@@ -325,9 +325,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
       'com.android.',
       'com.google.android.',
       'com.sec.android.',
-      'android',
-      'com.example.my_app',
-      'com.motorola.launcher3'
+      'android'
     ];
     const List<String> appNameExcludedList = [
       'Permission controller',
@@ -517,6 +515,80 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
     );
   }
 
+  Widget _buildBlockedAppsList(String childId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(childId)
+          .collection('blockedApps')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final blockedDocs = snapshot.data!.docs;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Blocked App${blockedDocs.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10.0,
+                runSpacing: 10.0,
+                children: blockedDocs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final packageName = doc.id;
+                  final appInfo = _childAppInfoCache[packageName];
+                  final appName =
+                      appInfo?.appName ?? data['appName'] ?? packageName;
+                  final icon = appInfo?.icon;
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A2A2A),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.red.withOpacity(0.5), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (icon != null)
+                          Image.memory(icon, width: 22, height: 22)
+                        else
+                          const Icon(Icons.block,
+                              size: 20, color: Colors.redAccent),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            appName,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildHomeContent() {
     // --- FIX: Restored the scan QR prompt for when no child is linked ---
     if (_qrCodeId == null) {
@@ -579,9 +651,9 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           final childId = linkSnapshot.data!['childId'] as String;
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            
             child: Column(
               children: [
+                _buildBlockedAppsList(childId),
                 if (_pieChartData.isNotEmpty)
                   Container(
                     height: 240,
@@ -599,8 +671,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
                           children: _pieChartData,
                         ),
                         const SizedBox(
-                          width: 110,
-                          height: 50,
+                          width: 100,
+                          height: 40,
                           child: Center(
                             child: Text(
                               'Child Usage',
@@ -835,10 +907,10 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
         title: _selectedIndex == 0
             ? const Row(
                 children: [
-                  Icon(Icons.family_restroom,
+                  Icon(Icons.dashboard_customize,
                       color: Color(0xFF2196F3), size: 28),
                   SizedBox(width: 12),
-                  Text('Parent Home',
+                  Text('Dashboard',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           color: Color(0xFF2196F3),
@@ -915,9 +987,15 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           onTap: (index) => setState(() => _selectedIndex = index),
           type: BottomNavigationBarType.fixed,
           selectedLabelStyle: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12),
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+            fontSize: 10,
+          ),
           unselectedLabelStyle: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w400, fontSize: 12),
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w400,
+            fontSize: 10,
+          ),
           items: [
             BottomNavigationBarItem(
               icon: AnimatedContainer(
@@ -936,7 +1014,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
                   size: _selectedIndex == 0 ? 28 : 24,
                 ),
               ),
-              label: 'Parent Home',
+              label: 'Home',
             ),
             BottomNavigationBarItem(
               icon: AnimatedContainer(
@@ -955,7 +1033,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
                   size: _selectedIndex == 1 ? 28 : 24,
                 ),
               ),
-              label: 'Child Messages',
+              label: 'Messages',
             ),
             BottomNavigationBarItem(
               icon: AnimatedContainer(
